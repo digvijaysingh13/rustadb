@@ -14,7 +14,7 @@ const LOGCAT: &str = "logcat";
 /**
  * adb install and set-up commands
  */
-const INSTALL_TOOLS: &str = "installtool";
+const DOWNLOAD_TOOLS: &str = "download";
 const SET_PATH: &str = "setpath";
 
 /**
@@ -33,12 +33,44 @@ const INSTALL_APK: &str = "install";
 const EXIT: &str = "exit";
 
 fn show_info() {
-    println!("{}: to show the all commands and their used.", SHOW_INFO);
+    println!(
+        "{:015}: to show the all commands and their used.",
+        SHOW_INFO
+    );
     println!();
 
+    // description printing for basic adb commands
+    println!(
+        "{:015}: to start adb server. This is equivalent to adb start-server.",
+        START_SERVER
+    );
+    println!(
+        "{:015}: to stop adb server. This is equivalent to adb kill-server.",
+        STOP_SERVER
+    );
+    println!(
+        "{:015}: to show the list of connected devices. This is equivalent to adb devices.",
+        LIST_DEVICES
+    );
+    println!("{:015}: to show ip of connected device.", SHOW_IP);
+    println!("{:015}: to connect the device with wifi.\n\te.g. {} IP:PORT.\n\tYou can get the IP of phone in Settings > Wifi Settings > Advance > IP Address.\n\tOr Search IP address in Setting. Or Use ip command.\n\tMake sure phone is connect through USB.",CONNECT_WITH_WIFI, CONNECT_WITH_WIFI);
+    println!("{:015}: to record logcat in file, after this command add file name where logcat should be stored.\n\teg. logcat demo.txt.", LOGCAT);
+    println!();
+    // description printing of install and setup commands
+    println!("{:015}: to download android command line tools and platform tools in home dir.", DOWNLOAD_TOOLS);
+    println!("{:015}: to set the downloaded tools enviromental path.", SET_PATH);
+    println!();
+    // description printing of phone interaction related commands
+    println!("{:015}: to capture the screen of connected devices.\n\teg. {} filename.png.", SCREEN_CAPTURE, SCREEN_CAPTURE);
+    println!("{:015}: to record the screen of connected devices.\n\teg. {} filename.mp4.", SCREEN_RECORD, SCREEN_RECORD);
+    println!("{:015}: to get dump of system or application.\n\teg. {} packagename.", DUMP, DUMP);
+    println!("{:015}: to print all installed applications packagename.", LIST_PACKAGE);
+    println!("{:015}: to pull the installed application from phone to computer.\n\teg. {} packagename.", PULL_APK, PULL_APK);
+    println!("{:015}: to install apk in connected phone.\n\teg. {} location/of/your/apk.", INSTALL_APK, INSTALL_APK);
+    println!();
     // Exit command
     println!("{}: to close radb app.", EXIT);
-    println!();
+    println!("\n");
 }
 
 fn get_cmd() -> Option<Vec<String>> {
