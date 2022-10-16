@@ -1,3 +1,5 @@
+use crate::utils::get_home_dir;
+
 // declaration of commands
 const SHOW_INFO: &str = "showinfo";
 
@@ -117,5 +119,16 @@ pub fn run_adb() {
 }
 
 fn exe_cmd(cmd: Vec<String>) {
-    println!("Execcuting the command.");
+    let c: &str = cmd[0].as_str();
+    if c == DOWNLOAD_TOOLS {
+        let home = get_home_dir();
+        match home {
+            Ok(path) => {
+                println!("{}", path);
+            }
+            Err(error) => {
+                println!("{}", error);
+            }
+        }
+    }
 }
