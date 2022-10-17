@@ -1,22 +1,25 @@
-use std::{
-    io::Error,
-    process::{Command, Output},
-};
+use std::process::Command;
 
-pub fn get_home_dir() -> Result<String, String> {
-    let mut home = Command::new("echo");
-    // home.arg("$HOME");
-    let out: Result<Output, Error> = home.output();
-    match out {
-        Ok(data) => {
-            let d = String::from_utf8(data.stdout);
-            if let Ok(path) = d {
-                return Ok(path);
-            }
-            return Err("Could not read file path characters.".to_owned());
+pub fn run_adb_cmd(args: Vec<String>) {
+    let mut cmd = Command::new("adb");
+    for each in args {
+        cmd.arg(each);
+    }
+    let out = cmd.output();
+    if let Err(e) = &out {
+        println!("{}", e);
+    } else {
+        let out = out.unwrap();
+        println!("status: {}", out.status);
+        let error = out.stderr;
+        if error.len() != 0 {
+            let error = String::from_utf8_lossy(&error);
+            println!("{}", error);
         }
-        Err(io_err) => {
-            return Err(io_err.to_string());
+        let output = out.stdout;
+        if output.len() != 0 {
+            let output = String::from_utf8_lossy(&output);
+            println!("{}", output);
         }
     }
 }
