@@ -1,6 +1,6 @@
 use std::{fs, io, path::PathBuf, process::Command};
 
-use crate::utils;
+use crate::utils::run_adb_cmd;
 
 // declaration of commands
 const SHOW_INFO: &str = "showinfo";
@@ -148,13 +148,49 @@ pub fn run_adb() {
 fn exe_cmd(cmd: Vec<String>) {
     let c: &str = cmd[0].as_str();
     if c == DOWNLOAD_TOOLS {
+        // to download and setting tools
         download_adb_tool();
     } else if c == SET_PATH {
+        // to set path
         set_adb_path();
     } else if c == START_SERVER {
-        utils::run_adb_cmd(vec!["start-server".to_owned()]);
+        // to start adb server
+        run_adb_cmd(vec!["start-server".to_owned()]);
     } else if c == STOP_SERVER {
-        utils::run_adb_cmd(vec!["kill-server".to_owned()]);
+        // to stop adb server
+        run_adb_cmd(vec!["kill-server".to_owned()]);
+    } else if c == LIST_DEVICES {
+        // to list connected devices
+        run_adb_cmd(vec!["devices".to_owned()]);
+    } else if c == SHOW_IP {
+        // to show ip of connected phone
+        run_adb_cmd(vec![
+            "shell".to_owned(),
+            "ip".to_owned(),
+            "addr".to_owned(),
+            "show".to_owned(),
+            "wlan0".to_owned(),
+        ]);
+    } else if c == SHOW_INFO {
+        show_info();
+    } else if c == CONNECT_WITH_WIFI {
+        // to connect the adb server on wifi
+        // checkout the validation
+        if cmd.len() != 2 {
+            println!("Too many or too less args provided. do like eg. connect 192.198.0.1:5555");
+            return;
+        }
+        let mut ip_ports = cmd[1].to_owned();
+        let arr: Vec<String> = ip_ports.split(":").map(|e| e.to_owned()).collect();
+        let port = if arr.len() != 2 {
+            println!("port not entered, adding default port 5555.");
+            ip_ports.push_str(":5555");
+            "5555"
+        } else {
+            &arr[1]
+        };
+        run_adb_cmd(vec!["tcpip".to_owned(), port.to_owned()]);
+        run_adb_cmd(vec!["connect".to_owned(), ip_ports.to_owned()]);
     }
 }
 
@@ -290,13 +326,13 @@ fn set_adb_path() {
             println!("tools is download. use {} to download it.", DOWNLOAD_TOOLS);
             return;
         }
-        let path_of_cmdline = path
+        let path_of_cmdline = adbpath
             .join("cmdline-tools")
             .join("bin")
             .into_os_string()
             .into_string()
             .unwrap();
-        let path_of_platform = path
+        let path_of_platform = adbpath
             .join("platform-tools")
             .into_os_string()
             .into_string()
