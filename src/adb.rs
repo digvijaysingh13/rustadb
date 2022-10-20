@@ -1,6 +1,11 @@
-use std::{fs, io, path::PathBuf, process::Command};
+use std::{
+    fs::{self, File},
+    io::{self, Write},
+    path::PathBuf,
+    process::Command,
+};
 
-use crate::utils::run_adb_cmd;
+use crate::utils::{get_adb_output, get_output_dir, get_time_str, run_adb_cmd};
 
 // declaration of commands
 const SHOW_INFO: &str = "showinfo";
@@ -58,7 +63,7 @@ fn show_info() {
     );
     println!("{:015}: to show ip of connected device.", SHOW_IP);
     println!("{:015}: to connect the device with wifi.\n\te.g. {} IP:PORT.\n\tYou can get the IP of phone in Settings > Wifi Settings > Advance > IP Address.\n\tOr Search IP address in Setting. Or Use ip command.\n\tMake sure phone is connect through USB.",CONNECT_WITH_WIFI, CONNECT_WITH_WIFI);
-    println!("{:015}: to record logcat in file, after this command add file name where logcat should be stored.\n\teg. logcat demo.txt.", LOGCAT);
+    println!("{:015}: to record logcat in file, after this command add file name where logcat should be stored.\n\teg. logcat demo.", LOGCAT);
     println!();
     // description printing of install and setup commands
     println!(
@@ -72,11 +77,11 @@ fn show_info() {
     println!();
     // description printing of phone interaction related commands
     println!(
-        "{:015}: to capture the screen of connected devices.\n\teg. {} filename.png.",
+        "{:015}: to capture the screen of connected devices.\n\teg. {} filename.",
         SCREEN_CAPTURE, SCREEN_CAPTURE
     );
     println!(
-        "{:015}: to record the screen of connected devices.\n\teg. {} filename.mp4.",
+        "{:015}: to record the screen of connected devices.\n\teg. {} filename.",
         SCREEN_RECORD, SCREEN_RECORD
     );
     println!(
@@ -171,6 +176,13 @@ fn exe_cmd(cmd: Vec<String>) {
             "show".to_owned(),
             "wlan0".to_owned(),
         ]);
+    } else if c == LOGCAT {
+        if cmd.len() < 2 {
+            adb_logcat(None);
+        } else {
+            let fname = &cmd[1];
+            adb_logcat(Some(&fname))
+        }
     } else if c == SHOW_INFO {
         show_info();
     } else if c == CONNECT_WITH_WIFI {
@@ -191,6 +203,46 @@ fn exe_cmd(cmd: Vec<String>) {
         };
         run_adb_cmd(vec!["tcpip".to_owned(), port.to_owned()]);
         run_adb_cmd(vec!["connect".to_owned(), ip_ports.to_owned()]);
+    } else if c == SCREEN_CAPTURE {
+        capture_screenshot(&cmd);
+    } else if c == SCREEN_RECORD {
+        if cmd.len() < 2 {
+            println!("insufficient arguments supplied. eg. record nameOfVideoFileYouWant.");
+            return;
+        }
+        record_video(&cmd[1]);
+    } else if c == DUMP {
+        if cmd.len() < 2 {
+            println!("insufficient arguments provided. eg. dump com.your.packagename");
+        }
+        dump_sys(&cmd[1]);
+    } else if c == INSTALL_APK {
+        // checkout the if path arg is entered or not
+        if cmd.len() < 2 {
+            println!("Apk location is not provided.");
+            return;
+        }
+        let location = &cmd[1];
+        run_adb_cmd(vec![
+            "install".to_owned(),
+            "-r".to_owned(),
+            location.to_owned(),
+        ]);
+    } else if c == PULL_APK {
+        // checkout the if path arg is entered or not
+        if cmd.len() < 2 {
+            println!("package name not provided.");
+            return;
+        }
+        let package_name = &cmd[1];
+        pull_apk(&package_name);
+    } else if c == LIST_PACKAGE {
+        run_adb_cmd(vec![
+            "shell".to_owned(),
+            "pm".to_owned(),
+            "list".to_owned(),
+            "packages".to_owned(),
+        ])
     }
 }
 
@@ -350,4 +402,260 @@ fn set_adb_path() {
     } else {
         println!("home dir not found!!!");
     }
+}
+
+fn capture_screenshot(cmds: &Vec<String>) {
+    // to capture the screen shot;
+    let output_dir = get_output_dir();
+    if let Some(output_path) = output_dir {
+        let mut filename = String::new();
+        // check if user added the file name
+        if cmds.len() > 1 {
+            filename.push_str(&cmds[1]);
+        }
+        let stamp = get_time_str();
+        filename.push_str(&stamp);
+        // adding extention name
+        filename.push_str(".png");
+        // create file
+        let filename = output_path.join(filename);
+        let file = fs::File::create(filename);
+        if let Err(error) = &file {
+            println!("{}", error);
+            return;
+        }
+        let mut file = file.unwrap();
+        // get data for command
+        let data = get_adb_output(vec!["shell", "screencap", "-p"]);
+        if let Err(error) = &data {
+            println!("{}", error);
+            return;
+        }
+        let data = data.unwrap();
+        let result = file.write_all(&data);
+        if let Err(error) = result {
+            println!("{}", error);
+            return;
+        }
+        // printing final success message
+        println!("capturing screen is done. checkout output in radb_output dir at desktop.")
+    } else {
+        println!("No output dir is found.");
+    }
+}
+
+fn dump_sys(package_name: &str) {
+    let mut sysdump_cmd = Command::new("adb");
+    sysdump_cmd.arg("shell");
+    sysdump_cmd.arg("dumpsys");
+    sysdump_cmd.arg("activity");
+
+    let child = sysdump_cmd.stdout(std::process::Stdio::piped()).spawn();
+    if let Err(err) = &child {
+        println!("{}", err);
+    }
+    let child = child.unwrap();
+
+    let mut grep_cmd = Command::new("grep");
+    grep_cmd.arg("-i");
+    grep_cmd.arg(package_name);
+    grep_cmd.stdin(child.stdout.unwrap());
+
+    let out_result = grep_cmd.output();
+    if let Ok(out) = out_result {
+        let output = out.stdout;
+        let out = String::from_utf8_lossy(&output);
+        println!("{}", out);
+        // save the file
+        let adb_dir = get_output_dir();
+        if let None = adb_dir {
+            // just print the whatever output
+            println!("{}", &out);
+            return;
+        }
+        let dumpfile = adb_dir.unwrap().join("dumpfile.txt");
+        if dumpfile.exists() {
+            let result = fs::remove_file(&dumpfile);
+            if let Err(error) = result {
+                println!("{}", error);
+            }
+        }
+        // create new file
+        let file = File::create(dumpfile);
+        if let Err(error) = &file {
+            println!("{}", error);
+            return;
+        }
+        let mut file = file.unwrap();
+        let result = file.write_all(&output);
+        if let Err(error) = &result {
+            println!("{}", error);
+            return;
+        } else {
+            println!("\n\n\ndumpfile.txt is stored in radboutput dir on desktop.\\n\n");
+        }
+    } else {
+        println!("{}", out_result.err().unwrap());
+    }
+}
+
+fn pull_apk(package_name: &str) {
+    let output_dir = get_output_dir().unwrap();
+    let output_dir = output_dir.into_os_string().into_string().unwrap();
+    let package_path = get_adb_output(vec!["shell", "pm", "path", package_name]);
+    if let Err(error) = package_path {
+        println!("{}", error);
+        return;
+    }
+    let package_path = String::from_utf8(package_path.unwrap()).unwrap();
+    let pull_package_path = &package_path.trim()[8..];
+    println!("pull apk from {} to {}.", pull_package_path, &output_dir);
+    run_adb_cmd(vec![
+        "pull".to_owned(),
+        pull_package_path.to_owned(),
+        output_dir,
+    ])
+}
+
+fn adb_logcat(save_path: Option<&str>) {
+    // first clear the exiting logcat
+    run_adb_cmd(vec![
+        "logcat".to_owned(),
+        "-b".to_owned(),
+        "all".to_owned(),
+        "-c".to_owned(),
+    ]);
+    println!("out adb buffer cleared.");
+    if save_path.is_none() {
+        run_adb_cmd(vec!["logcat".to_owned()]);
+        return;
+    }
+    // now create the file with same name
+    let home_path = get_output_dir().unwrap();
+    let mut logcat_file_name = String::new();
+    logcat_file_name.push_str(save_path.unwrap());
+    let time = get_time_str();
+    let time = time.replace(":", "");
+    let time = time.replace(".", "");
+    let time = time.replace(" ", "");
+    let time = time.replace('+', "");
+    let time = format!("_{}.txt", time);
+    logcat_file_name.push_str(&time);
+    let logcat_file_path = home_path.join(logcat_file_name);
+    // if something like this exists then delete it
+    if logcat_file_path.exists() {
+        if let Err(error) = fs::remove_file(&logcat_file_path) {
+            println!("{}", error);
+            return;
+        }
+    }
+
+    // create the file
+    let file = fs::File::create(&logcat_file_path);
+    if let Err(error) = &file {
+        println!("{}", error);
+        return;
+    }
+
+    let file = file.unwrap();
+    let stdio = std::process::Stdio::from(file);
+    let mut logcat_cmd = Command::new("adb");
+    logcat_cmd.arg("logcat");
+    logcat_cmd.stdout(stdio);
+    let child = logcat_cmd.spawn();
+    if let Err(error) = child {
+        println!("{}", error);
+        return;
+    }
+    let mut child = child.unwrap();
+    loop {
+        println!("Enter quit to stop logcat commanding");
+        let cmd = get_cmd();
+        if let Some(cmd) = cmd {
+            if cmd.len() < 1 {
+                continue;
+            }
+            let c = &cmd[0];
+            if c == "quit" {
+                if let Err(error) = child.kill() {
+                    println!("{}", error);
+                }
+                break;
+            }
+        }
+    }
+}
+
+fn record_video(video_name: &str) {
+    // start video recording in phone storage
+    let mut video_cmd = Command::new("adb");
+    video_cmd.arg("shell");
+    video_cmd.arg("screenrecord");
+    video_cmd.arg("/sdcard/radbvideo.mp4");
+    let child = video_cmd.spawn();
+    if let Err(error) = &child {
+        println!("{}", error);
+        return;
+    }
+    let mut child = child.unwrap();
+    loop {
+        println!("Enter stop to stop recording of video");
+        let cm = get_cmd();
+        if cm.is_none() {
+            continue;
+        }
+        let cm = cm.unwrap();
+        if cm.len() < 1 {
+            continue;
+        }
+        if "stop" == &cm[0] {
+            let r = child.kill();
+            if let Err(error) = r {
+                println!("{}", error);
+                continue;
+            }
+            break;
+        }
+    }
+    // after video recording is finished pull the apk
+    // create unique file
+    let home = get_output_dir();
+    if home.is_none() {
+        delete_recorded_video();
+        return;
+    }
+    let file_path = home.unwrap().join(format!("{}.mp4", video_name));
+    if file_path.exists() {
+        // delete the existing file.
+        println!("deleting the existing file ...");
+        fs::remove_file(&file_path).unwrap();
+    }
+    let file = fs::File::create(&file_path);
+    if let Err(err) = file {
+        println!("{}", err);
+        delete_recorded_video();
+        return;
+    }
+    println!("Pulling video...");
+    // after file create pull the video
+    let dest_path = file_path.into_os_string().into_string().unwrap();
+    // wait for some time 5 secs
+    std::thread::sleep(
+        std::time::Duration::from_secs(5)
+    );
+    run_adb_cmd(vec![
+        "pull".to_owned(),
+        "/sdcard/radbvideo.mp4".to_owned(),
+        dest_path,
+    ]);
+    // after pulling is completed delete the video from sdcard
+    delete_recorded_video();
+}
+
+fn delete_recorded_video() {
+    run_adb_cmd(vec![
+        "shell".to_owned(),
+        "rm".to_owned(),
+        "/sdcard/radbvideo.mp4".to_owned(),
+    ]);
 }
