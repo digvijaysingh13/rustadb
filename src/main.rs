@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-
 mod adb;
 mod utils;
 
