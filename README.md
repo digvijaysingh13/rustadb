@@ -37,3 +37,8 @@ install        : to install apk in connected phone.
 exit: to close radb app.
 ```
 #### Above option is shown when app starts ####
+
+### Requirements ###
+* Lunix OS.
+* Java should installed for adb.
+* Git to clone jar files.
